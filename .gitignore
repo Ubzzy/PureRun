@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Legacy AI Studio Firebase export (use VITE_* in .env instead)
+firebase-applet-config.json
