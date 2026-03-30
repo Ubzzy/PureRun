@@ -1,0 +1,166 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /services/{serviceId}
+    // Fields:
+    //   - name: string (required, < 100 chars)
+    //   - tagline: string (optional, < 200 chars)
+    //   - description: string (optional, < 1000 chars)
+    //   - price: number (required, > 0)
+    //   - icon: string (optional, < 50 chars)
+    //
+    // Collection: /bookings/{bookingId}
+    // Fields:
+    //   - serviceId: string (required)
+    //   - name: string (required, < 100 chars)
+    //   - email: string (required, email format)
+    //   - phone: string (optional, < 20 chars)
+    //   - location: string (required, < 500 chars)
+    //   - date: string (required, ISO date format)
+    //   - carInfo: string (required, < 200 chars)
+    //   - distance: number (optional, >= 0)
+    //   - travelFee: number (optional, >= 0)
+    //   - total: number (required, >= 0)
+    //   - status: string (required, enum: pending, confirmed, completed, cancelled)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: /availability/{date}
+    // Fields:
+    //   - date: string (required, ISO date format)
+    //   - slots: list (required, < 20 items)
+    //
+    // Collection: /settings/global
+    // Fields:
+    //   - baseLocation: string (required, < 500 chars)
+    //   - travelFeePerKm: number (required, >= 0)
+    //   - maxDistance: number (required, >= 0)
+    //   - adminEmail: string (required, email format)
+    //
+    // Collection: /users/{userId}
+    // Fields:
+    //   - email: string (required, email format)
+    //   - role: string (required, enum: admin)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email in ["admin@wiliodaeze.resend.app", "delawalaubaid@gmail.com"] && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDate(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*");
+    }
+
+    function isValidService(data) {
+      return data.keys().hasAll(['name', 'price']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.price is number && data.price >= 0 &&
+             (!('tagline' in data) || (data.tagline is string && data.tagline.size() < 200)) &&
+             (!('description' in data) || (data.description is string && data.description.size() < 1000)) &&
+             (!('icon' in data) || (data.icon is string && data.icon.size() < 50));
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['serviceId', 'name', 'email', 'location', 'date', 'carInfo', 'total', 'status', 'createdAt']) &&
+             data.serviceId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.location is string && data.location.size() > 0 && data.location.size() < 500 &&
+             isValidDate(data.date) &&
+             data.carInfo is string && data.carInfo.size() > 0 && data.carInfo.size() < 200 &&
+             data.total is number && data.total >= 0 &&
+             data.status in ['pending', 'confirmed', 'completed', 'cancelled'] &&
+             data.createdAt is timestamp &&
+             (!('userId' in data) || (data.userId is string)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() < 20)) &&
+             (!('distance' in data) || (data.distance is number && data.distance >= 0)) &&
+             (!('travelFee' in data) || (data.travelFee is number && data.travelFee >= 0));
+    }
+
+    function isValidAvailability(data) {
+      return data.keys().hasAll(['date', 'slots']) &&
+             isValidDate(data.date) &&
+             data.slots is list && data.slots.size() < 20;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['baseLocation', 'travelFeePerKm', 'maxDistance', 'adminEmail']) &&
+             data.baseLocation is string && data.baseLocation.size() > 0 && data.baseLocation.size() < 500 &&
+             data.travelFeePerKm is number && data.travelFeePerKm >= 0 &&
+             data.maxDistance is number && data.maxDistance >= 0 &&
+             isValidEmail(data.adminEmail);
+    }
+
+    // ===============================================================
+    // Match Rules
+    // ===============================================================
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidService(request.resource.data);
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if true && isValidBooking(request.resource.data);
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.status == 'cancelled' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+      allow delete: if isAdmin();
+    }
+
+    match /availability/{date} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidAvailability(request.resource.data);
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidSettings(request.resource.data);
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role']) &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'user'] &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() < 20)) &&
+             (!('defaultCarInfo' in data) || (data.defaultCarInfo is string && data.defaultCarInfo.size() < 200));
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (
+        (request.resource.data.role == 'admin' && request.auth.token.email in ["admin@wiliodaeze.resend.app", "delawalaubaid@gmail.com"] && request.auth.token.email_verified == true) ||
+        (request.resource.data.role == 'user')
+      );
+      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role && isValidUser(request.resource.data));
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "PureRun Mobile Detailing",
+  "description": "Professional mobile car detailing delivered to your location. High-end service for those who value their time and their vehicle.",
+  "requestFramePermissions": ["geolocation"]
+}

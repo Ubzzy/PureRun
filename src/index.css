@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", serif;
+  --font-sans: "Barlow", sans-serif;
+  --font-condensed: "Barlow Condensed", sans-serif;
+
+  --color-brand-black: #0a0a0a;
+  --color-brand-white: #f8f8f6;
+  --color-brand-grey: #888;
+  --color-brand-light-grey: #e8e8e6;
+}
+
+@layer base {
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;500;600;700&display=swap');
+
+  body {
+    @apply bg-brand-white text-brand-black font-sans font-light overflow-x-hidden antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif font-light;
+  }
+
+  .btn-primary {
+    @apply font-condensed font-semibold text-[12px] tracking-[0.16em] uppercase bg-brand-black text-brand-white px-9 py-4 transition-all hover:bg-zinc-800 active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply font-condensed text-[12px] tracking-[0.14em] uppercase font-medium border-b border-brand-black pb-0.5 transition-opacity hover:opacity-50;
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
